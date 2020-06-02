@@ -1,7 +1,15 @@
 import json
+from io import BytesIO
 
 import pandas as pd
 import requests
+
+from covid.extract_utils import unzip_string
+
+
+ILI_NET_CSV = "ILINet.csv"
+WHO_NREVSS_PUBLIC_HEALTH_LABS_CSV = "WHO_NREVSS_Public_Health_Labs.csv"
+WHO_NREVSS_CLINICAL_LABS_CSV = "WHO_NREVSS_Clinical_Labs.csv"
 
 
 DATE_SOURCE_FIELD = "date"
@@ -44,3 +52,26 @@ def get_state_abbreviations_to_names():
         abbreviations = json.load(state_abbreviations_file)
 
     return abbreviations
+
+
+def extract_cdc_ili_data():
+    current_url = "https://gis.cdc.gov/grasp/flu2/PostPhase02DataDownload"
+    payload = {
+        "AppVersion": "Public",
+        "DatasourceDT": [{"ID": 0, "Name": "WHO_NREVSS"}, {"ID": 1, "Name": "ILINet"}],
+        "RegionTypeId": 5,
+        # Request all 59 regions.
+        "SubRegionsDT": [{"ID": i, "Name": i} for i in range(1, 60)],
+        "SeasonsDT": [{"ID": 59, "Name": "59"}],
+    }
+
+    response = requests.post(
+        url=current_url,
+        headers={"Content-Type": "application/json;charset=UTF-8"},
+        data=json.dumps(payload),
+    )
+    filenames_to_contents_map = unzip_string(response.content)
+
+    ili_net_df = pd.read_csv(BytesIO(filenames_to_contents_map[ILI_NET_CSV]))
+
+    return ili_net_df
